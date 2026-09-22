@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 2,
+  "waveId": "REPLACE-WAVE-ID",
+  "mode": "multi-writer",
+  "method": {
+    "schemaVersion": 2,
+    "methodId": "multi-lane-wave-engineering",
+    "methodVersion": "2.0.0",
+    "digestAlgorithm": "sha256-path-nul-bytes-nul-v1",
+    "canonicalDigest": "sha256:REPLACE",
+    "provenanceStatus": "UNVERIFIED_LOCAL",
+    "sourceRevision": null,
+    "provenanceAuthority": null,
+    "recoverySource": null,
+    "recoveryDigest": null
+  },
+  "charters": ["wave-charter.json"],
+  "charterDigest": "sha256:REPLACE",
+  "handoffs": ["handoff-01.json"],
+  "finalBaton": "REPLACE-FULL-SHA",
+  "ownerIntegrationSnapshot": "owner-integration.json",
+  "integrationHead": "REPLACE-FULL-SHA",
+  "ownerVerification": {
+    "revision": "REPLACE-FULL-SHA",
+    "localChecks": [
+      {
+        "checkId": "REPLACE-LOCAL-CHECK",
+        "command": "REPLACE-LOCAL-COMMAND",
+        "revision": "REPLACE-FULL-SHA",
+        "verdict": "PASS"
+      }
+    ],
+    "independentReviewEvidence": "evidence-independent-review.json"
+  },
+  "landing": {
+    "mode": "two-parent-merge",
+    "baseRevision": "REPLACE-FULL-SHA",
+    "mergeRevision": "REPLACE-FULL-SHA",
+    "mergeParents": ["REPLACE-BASE-SHA", "REPLACE-INTEGRATION-HEAD-SHA"]
+  },
+  "externalEvidence": ["evidence-pr.json", "evidence-main.json"],
+  "openDecisions": [],
+  "rollbackAuthority": "REPLACE-WAVE-OWNER-OR-PROGRAMME-CONDUCTOR",
+  "synchronization": {
+    "mainRef": "origin/main",
+    "mainRevision": "REPLACE-MERGE-SHA",
+    "instructionPath": "AGENTS.md",
+    "instructionBlob": "REPLACE-BLOB-ID",
+    "worktreeCount": 1
+  }
+}

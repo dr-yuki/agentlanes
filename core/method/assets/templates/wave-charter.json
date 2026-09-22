@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 2,
+  "waveId": "REPLACE-WAVE-ID",
+  "mode": "multi-writer",
+  "method": {
+    "schemaVersion": 2,
+    "methodId": "multi-lane-wave-engineering",
+    "methodVersion": "2.0.0",
+    "digestAlgorithm": "sha256-path-nul-bytes-nul-v1",
+    "canonicalDigest": "sha256:REPLACE",
+    "provenanceStatus": "UNVERIFIED_LOCAL",
+    "sourceRevision": null,
+    "provenanceAuthority": null,
+    "recoverySource": null,
+    "recoveryDigest": null
+  },
+  "previousCharter": null,
+  "baselineCommit": "REPLACE-FULL-SHA",
+  "baselineTree": "REPLACE-TREE-ID",
+  "programmeConductor": "REPLACE-ACTOR",
+  "waveOwner": "REPLACE-ACTOR",
+  "workspaceAdmission": {
+    "mainRef": "origin/main",
+    "instructionPath": "AGENTS.md",
+    "instructionBlob": "REPLACE-BLOB-ID",
+    "workspaces": [
+      {
+        "workspaceId": "REPLACE-ISOLATED-WORKSPACE-A",
+        "actor": "REPLACE-ACTOR-A",
+        "worktreeGitDir": ".git/worktrees/REPLACE-A",
+        "physicalIdentityDigest": "sha256:REPLACE",
+        "headRevision": "REPLACE-FULL-SHA",
+        "ahead": 0,
+        "behind": 0,
+        "clean": true
+      },
+      {
+        "workspaceId": "REPLACE-ISOLATED-WORKSPACE-B",
+        "actor": "REPLACE-ACTOR-B",
+        "worktreeGitDir": ".git/worktrees/REPLACE-B",
+        "physicalIdentityDigest": "sha256:REPLACE",
+        "headRevision": "REPLACE-FULL-SHA",
+        "ahead": 0,
+        "behind": 0,
+        "clean": true
+      },
+      {
+        "workspaceId": "REPLACE-ISOLATED-OWNER-WORKSPACE",
+        "actor": "REPLACE-ACTOR",
+        "worktreeGitDir": ".git/worktrees/REPLACE-OWNER",
+        "physicalIdentityDigest": "sha256:REPLACE",
+        "headRevision": "REPLACE-FULL-SHA",
+        "ahead": 0,
+        "behind": 0,
+        "clean": true
+      }
+    ]
+  },
+  "objective": "REPLACE-OBJECTIVE",
+  "inScope": ["REPLACE"],
+  "outOfScope": ["REPLACE"],
+  "failureDomain": "REPLACE",
+  "cells": [
+    {
+      "cellId": "REPLACE-CELL-A",
+      "workspaceId": "REPLACE-ISOLATED-WORKSPACE-A",
+      "actor": "REPLACE-ACTOR-A",
+      "dependsOn": [],
+      "writablePaths": ["REPLACE/EXACT/PATH-A"],
+      "semanticSeams": ["REPLACE-SEAM-A"],
+      "focusedChecks": ["REPLACE-COMMAND-A"],
+      "nextWork": ["REPLACE-STARTABLE-WORK-A"],
+      "requiredAttestationSource": null
+    },
+    {
+      "cellId": "REPLACE-CELL-B",
+      "workspaceId": "REPLACE-ISOLATED-WORKSPACE-B",
+      "actor": "REPLACE-ACTOR-B",
+      "dependsOn": ["REPLACE-CELL-A"],
+      "writablePaths": ["REPLACE/EXACT/PATH-B"],
+      "semanticSeams": ["REPLACE-SEAM-B"],
+      "focusedChecks": ["REPLACE-COMMAND-B"],
+      "nextWork": ["REPLACE-STARTABLE-WORK-B"],
+      "requiredAttestationSource": null
+    }
+  ],
+  "ownerOnlyPaths": ["REPLACE/EXACT/OWNER/PATH"],
+  "authorityCeilings": ["REPLACE-LIMIT"],
+  "transportLifecycle": "REPLACE",
+  "sideEffectClass": "REPLACE",
+  "rollback": "REPLACE",
+  "ownerIntegration": {
+    "requiredLocalChecks": [
+      {"checkId": "REPLACE-LOCAL-CHECK", "command": "REPLACE-LOCAL-COMMAND"}
+    ],
+    "independentReview": {
+      "requirementId": "independent-review",
+      "requiredAttestationSource": "REPLACE-INDEPENDENT-REVIEW-AUTHORITY",
+      "requiredCheckIds": ["REPLACE-REVIEW-CHECK"]
+    }
+  },
+  "externalEvidence": [
+    {
+      "requirementId": "pr-head",
+      "stage": "pr",
+      "subjectRelation": "synthetic-two-parent",
+      "requiredAttestationSource": "REPLACE-PR-AUTHORITY",
+      "requiredCheckIds": ["REPLACE-CHECK"],
+      "requiredArtifacts": [
+        {
+          "artifactId": "REPLACE-PR-ARTIFACT",
+          "requiredStatusIds": ["REPLACE-ARTIFACT-STATUS"]
+        }
+      ]
+    },
+    {
+      "requirementId": "post-merge",
+      "stage": "post-merge",
+      "subjectRelation": "merge-exact",
+      "requiredAttestationSource": "REPLACE-POST-MERGE-AUTHORITY",
+      "requiredCheckIds": ["REPLACE-CHECK"],
+      "requiredArtifacts": [
+        {
+          "artifactId": "REPLACE-POST-MERGE-ARTIFACT",
+          "requiredStatusIds": ["REPLACE-ARTIFACT-STATUS"]
+        }
+      ]
+    }
+  ],
+  "stopConditions": ["REPLACE"],
+  "acceptance": ["REPLACE-MEASURABLE-CONDITION"]
+}

@@ -1,0 +1,11 @@
+# The method bundle is digest-pinned. This repository must never let a checkout
+# rewrite its line endings, or the canonical digest changes and every project that
+# vendored it goes read-only.
+core/method/** text eol=lf
+core/policy/** text eol=lf
+templates/** text eol=lf
+cli/** text eol=lf
+# Copied into every project beside the vendored files and pinned there by digest, so a
+# checkout must not rewrite it either.
+LICENSE text eol=lf
+examples/** text eol=lf

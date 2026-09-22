@@ -1,0 +1,12 @@
+# agentlanes:begin
+# Managed pins, rewritten at the end of this file on every apply, because the last matching
+# line is the one in effect. They keep the vendored bundle and the bridge files byte-stable
+# across checkouts; without them, a clone on a machine with core.autocrlf=true rewrites their
+# line endings and the project lock is wrong for everyone.
+.agents/agentlanes/** text eol=lf
+.agents/multi-lane-wave-method.lock.json text eol=lf
+.agents/agentlanes.lock.json text eol=lf
+.gitattributes text eol=lf
+AGENTS.md text eol=lf
+CLAUDE.md text eol=lf
+# agentlanes:end

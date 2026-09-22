@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "waveId": "REPLACE-WAVE-ID",
+  "charterDigest": "sha256:REPLACE",
+  "evidenceId": "REPLACE-EVIDENCE-ID",
+  "requirementId": "REPLACE-REQUIREMENT-ID-OR-NULL",
+  "stage": "pr",
+  "cellId": null,
+  "workspaceId": null,
+  "actor": "REPLACE-WAVE-OWNER",
+  "attestationSource": "REPLACE-PROVIDER-OR-INDEPENDENT-AUDIT",
+  "subject": {
+    "relation": "synthetic-two-parent",
+    "revision": "REPLACE-FULL-SHA",
+    "tree": "REPLACE-TREE-ID",
+    "parents": ["REPLACE-BASE-SHA", "REPLACE-HEAD-SHA"],
+    "baseRevision": "REPLACE-BASE-SHA",
+    "headRevision": "REPLACE-HEAD-SHA"
+  },
+  "checks": [
+    {
+      "checkId": "REPLACE-CHECK",
+      "status": "PASS",
+      "revision": "REPLACE-FULL-SHA"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "REPLACE-PR-ARTIFACT",
+      "revision": "REPLACE-FULL-SHA",
+      "digestAlgorithm": "sha256",
+      "digest": "sha256:REPLACE-64-LOWERCASE-HEX",
+      "statuses": [
+        {
+          "checkId": "REPLACE-ARTIFACT-STATUS",
+          "status": "PASS",
+          "revision": "REPLACE-FULL-SHA"
+        }
+      ]
+    }
+  ],
+  "verdict": "PASS"
+}

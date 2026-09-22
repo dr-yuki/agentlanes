@@ -1,0 +1,160 @@
+# Every suite, on Linux, macOS and Windows, with the oldest Python the package supports and a
+# current one - on every push and pull request, and once a week.
+#
+# Until 2026-09-07 the package had only been measured on one Windows machine. A defect found that
+# day - a file whose name differs from `.gitattributes` only in case, which git reads on a
+# case-insensitive filesystem and nobody reads on a case-sensitive one - is why there is a Linux
+# leg, and the first thing that leg found was another case collision, in the installer. macOS and
+# Windows have traps of their own (a temporary directory reached through a symlink, under which
+# the guard's fixtures are built; a system-wide `core.autocrlf`), so every event runs all three.
+
+name: suites
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: One Python to run every suite with. Leave empty for 3.10 and 3.12.
+        default: ""
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  suites:
+    strategy:
+      fail-fast: false        # a Linux failure must not hide a macOS one
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # 3.10 is the floor the package states, 3.12 a current one. A run dispatched by hand can
+        # name a single other version instead.
+        python: >-
+          ${{ inputs.python-version
+              && fromJSON(format('["{0}"]', inputs.python-version))
+              || fromJSON('["3.10", "3.12"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Resolve git, python, and the temporary directory
+        shell: bash
+        run: |
+          # A temporary directory that is not reached through a symlink. macOS resolves its
+          # default one through /var -> /private/var, and the vendored guard refuses to
+          # traverse a symlink when it locates a repository - correctly, and by design. The
+          # guard's own suite builds fixtures with tempfile, and that bundle is byte-pinned
+          # into every adopting project, so this belongs in the environment, not the bundle.
+          for name in TMPDIR TMP TEMP; do echo "$name=$RUNNER_TEMP" >> "$GITHUB_ENV"; done
+          echo "temp: $RUNNER_TEMP"
+          # check.py refuses a --git-executable that is relative or a link, on purpose: a name
+          # resolved through PATH is whatever happens to be first there. Homebrew's git is a
+          # symlink into ../Cellar, so `which git` alone is not enough.
+          GIT_REAL="$(python -c 'import shutil,os;print(os.path.realpath(shutil.which("git")))')"
+          PY_REAL="$(python -c 'import sys;print(sys.executable)')"
+          {
+            echo "GIT_REAL=$GIT_REAL"
+            echo "PY_REAL=$PY_REAL"
+          } >> "$GITHUB_ENV"
+          echo "git:    $GIT_REAL"
+          echo "python: $PY_REAL"
+          "$GIT_REAL" --version
+          "$PY_REAL" --version
+
+      # Each suite is its own step and runs on its own, so an exit code belongs to one question.
+      # A pipe would replace it with the exit code of whatever came after.
+      - name: check.py suite
+        shell: bash
+        run: '"$PY_REAL" -I -B cli/test_check.py --git-executable "$GIT_REAL"'
+
+      - name: init suite
+        shell: bash
+        run: '"$PY_REAL" -I -B cli/test_init.py --git-executable "$GIT_REAL"'
+
+      - name: guard supplement
+        shell: bash
+        run: '"$PY_REAL" -I -B cli/test_guard_supplement.py --git-executable "$GIT_REAL"'
+
+      - name: the vendored guard's own suite
+        shell: bash
+        env:
+          WAVE_GUARD_TEST_GIT_EXECUTABLE: ${{ env.GIT_REAL }}
+        run: '"$PY_REAL" -I -B core/method/scripts/test_wave_guard.py'
+
+      # The scenario a person is told to run, run by a machine that has never seen this package.
+      - name: install into a fresh project and check it
+        shell: bash
+        run: |
+          set -e
+          PROJ="$(mktemp -d)/proj"
+          mkdir -p "$PROJ"
+          "$GIT_REAL" -C "$PROJ" init -q -b main
+          "$PY_REAL" -I -B cli/agentlanes.py init --apply --repo "$PROJ" \
+            --git-executable "$GIT_REAL"
+          "$GIT_REAL" -C "$PROJ" add -- AGENTS.md CLAUDE.md .gitattributes \
+            .agents/agentlanes .agents/agentlanes.lock.json \
+            .agents/multi-lane-wave-method.lock.json
+          "$GIT_REAL" -C "$PROJ" -c user.name=ci -c user.email=ci@example.invalid \
+            commit -q -m "adopt agentlanes"
+          "$PY_REAL" -I -B cli/check.py --repo "$PROJ" --git-executable "$GIT_REAL"
+
+      # README tells adopters to check out with `fetch-depth: 0`, because the vendored guard
+      # refuses a shallow clone. That is a claim about actions/checkout, so ask actions/checkout:
+      # check this repository out twice more, adopt agentlanes inside each checkout in place of
+      # its own files, and run the vendored checker the way README's example does. These run
+      # last, so the nested checkouts cannot reach the suites above.
+      - name: an actions/checkout at the default depth
+        uses: actions/checkout@v4
+        with:
+          path: adopted-shallow
+
+      - name: an actions/checkout with full history
+        uses: actions/checkout@v4
+        with:
+          path: adopted-full
+          fetch-depth: 0
+
+      - name: the check gives 2 at the default depth and 0 with full history
+        shell: bash
+        run: |
+          set -e
+          adopt() {
+            "$GIT_REAL" -C "$1" rm -rq -- .
+            "$PY_REAL" -I -B cli/agentlanes.py init --apply --repo "$1" \
+              --git-executable "$GIT_REAL"
+            "$GIT_REAL" -C "$1" add -- AGENTS.md CLAUDE.md .gitattributes \
+              .agents/agentlanes .agents/agentlanes.lock.json \
+              .agents/multi-lane-wave-method.lock.json
+            "$GIT_REAL" -C "$1" -c user.name=ci -c user.email=ci@example.invalid \
+              commit -q -m "adopt agentlanes"
+          }
+          status=0
+          for dir in adopted-shallow adopted-full; do
+            adopt "$dir"
+            echo "shallow: $("$GIT_REAL" -C "$dir" rev-parse --is-shallow-repository)"
+            code=0
+            out="$(cd "$dir" && "$PY_REAL" -I -B .agents/agentlanes/cli/check.py --repo . \
+              --git-executable "$GIT_REAL")" || code=$?
+            echo "$out"
+            want=0; [ "$dir" = adopted-shallow ] && want=2
+            echo "$dir: check exited $code, expected $want"
+            [ "$code" = "$want" ] || status=1
+            # A 2 for some other reason would also be a 2. The shallow leg has to be refused for
+            # being shallow.
+            if [ "$dir" = adopted-shallow ]; then
+              case "$out" in
+                *"shallow history"*) echo "$dir: refused for shallow history, as expected" ;;
+                *) echo "$dir: the 2 was not about shallow history"; status=1 ;;
+              esac
+            fi
+          done
+          exit "$status"

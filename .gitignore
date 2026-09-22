@@ -1,0 +1,4 @@
+# Bytecode. Every entry point in this package refuses to run without -I -B, so this
+# directory can only appear when something bypassed that - as `py_compile` does.
+__pycache__/
+*.pyc

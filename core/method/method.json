@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "methodId": "multi-lane-wave-engineering",
+  "methodVersion": "2.0.0",
+  "transportProfile": "linear-replay-v2",
+  "digestAlgorithm": "sha256-path-nul-bytes-nul-v1",
+  "canonicalFiles": [
+    "SKILL.md",
+    "agents/openai.yaml",
+    "assets/templates/baton-handoff.json",
+    "assets/templates/evidence-record.json",
+    "assets/templates/wave-charter.json",
+    "assets/templates/wave-closeout.json",
+    "references/protocol.md",
+    "references/recovery.md",
+    "scripts/test_wave_guard.py",
+    "scripts/wave_guard.py"
+  ]
+}

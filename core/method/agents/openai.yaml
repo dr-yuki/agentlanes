@@ -1,0 +1,6 @@
+interface:
+  display_name: "Multi-Lane Wave Engineering"
+  short_description: "Coordinate isolated Git lanes safely"
+  default_prompt: "Use $multi-lane-wave-engineering to coordinate this work across isolated, verifiable lanes."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "waveId": "REPLACE-WAVE-ID",
+  "charterDigest": "sha256:REPLACE",
+  "cellId": "REPLACE-CELL-ID",
+  "workspaceId": "REPLACE-ISOLATED-WORKSPACE",
+  "sequence": 1,
+  "fromActor": "REPLACE-ACTOR",
+  "toActor": "REPLACE-ACTOR",
+  "incomingBaton": "REPLACE-FULL-SHA",
+  "outgoingBaton": "REPLACE-FULL-SHA",
+  "preparedSnapshot": "REPLACE-PATH-TO-SNAPSHOT-JSON",
+  "integratedSnapshot": "REPLACE-PATH-TO-SNAPSHOT-JSON",
+  "previousHandoff": null,
+  "focusedVerification": [
+    {
+      "command": "REPLACE-COMMAND",
+      "revision": "REPLACE-FULL-SHA",
+      "verdict": "PASS"
+    }
+  ],
+  "workingTreeClean": true,
+  "conflictResolution": null,
+  "nextWork": ["REPLACE-STARTABLE-WORK"]
+}
