@@ -21,6 +21,7 @@ if sys.flags.isolated != 1 or sys.flags.dont_write_bytecode != 1:
 import argparse
 import json
 import os
+import re
 import shutil
 import contextlib
 import ctypes
@@ -44,7 +45,7 @@ OWN_ATTRIBUTES = b"*.png binary\n"
 # on every platform: a state a platform cannot build is recorded once per row as notApplicable,
 # never as one row standing for several. Raise it when you add a case - that is the point. It
 # went in because two platforms disagreed about it silently, 81 against 77, both green.
-ROWS = 81
+ROWS = 95
 
 
 def force_writable(func, path, _exc):
@@ -83,13 +84,14 @@ def run(script: str, repo: str, git_exe: str, *args: str) -> tuple[int, dict]:
         return done.returncode, {"stdout": done.stdout[-800:], "stderr": done.stderr[-800:]}
 
 
-def stage_and_commit(repo: str, git_exe: str) -> None:
+def stage_and_commit(repo: str, git_exe: str, paths: list[str] | None = None) -> None:
     """Stage the exact paths, then commit them.
 
     A clone receives the committed tree. Stopping at `git add` measured a project nobody else
-    could obtain, and check.py says so now rather than calling it clean.
+    could obtain, and check.py says so now rather than calling it clean. Pass the `stage` list a
+    run printed where following that list is what the row claims.
     """
-    subprocess.run([git_exe, "-C", repo, "add", "--", *STAGE],
+    subprocess.run([git_exe, "-C", repo, "add", "--", *(STAGE if paths is None else paths)],
                    capture_output=True, timeout=120, check=True)
     subprocess.run([git_exe, "-C", repo, "-c", "user.name=t", "-c",
                     "user.email=t@example.invalid", "commit", "-q", "-m", "adopt"],
@@ -292,6 +294,56 @@ def apply_with_a_failing_write(workspace: str, git_exe: str, failing: str,
         return code, json.loads(out.getvalue())
     except json.JSONDecodeError:
         return code, {"stdout": out.getvalue()[-300:]}
+
+
+def package_version(installer: str) -> str:
+    with open(installer, "rb") as handle:
+        found = re.search(rb'(?m)^PACKAGE_VERSION = "([^"]+)"', handle.read())
+    return found.group(1).decode() if found else "(missing)"
+
+
+def older_package(workspace: str) -> str:
+    """This package, one version back: the policy's tokens, the bridge's line and marker, and the
+    installer's PACKAGE_VERSION all say so, as they would in a real earlier release.
+
+    Every re-apply above applies the same bytes twice. An upgrade applies different ones over a
+    committed install, and nothing asked what that does until a release needed it. The copy
+    installs itself, because the installer finds its package from its own path.
+    """
+    root = tempfile.mkdtemp(prefix="older", dir=workspace)
+    package = os.path.dirname(HERE)
+    for sub in ("cli", "core", "templates"):
+        shutil.copytree(os.path.join(package, sub), os.path.join(root, sub))
+    shutil.copyfile(os.path.join(package, "LICENSE"), os.path.join(root, "LICENSE"))
+    policy = os.path.join(root, "core", "policy", "REPOSITORY_POLICY.md")
+    with open(policy, "rb") as handle:
+        data = handle.read()
+    current = re.match(rb"AGENTLANES-POLICY-BEGIN[ \t]+(\S+)", data).group(1)
+    older = current + b"-older"
+    moved = re.sub(rb"(?m)^(AGENTLANES-POLICY-(?:BEGIN|END)[ \t]+)" + re.escape(current)
+                   + rb"[ \t]*$", lambda m: m.group(1) + older, data)
+    assert moved.count(older) == 2, "the older copy did not move both policy tokens"
+    with open(policy, "wb") as handle:
+        handle.write(moved)
+    template = os.path.join(root, "templates", "AGENTS.md")
+    with open(template, "rb") as handle:
+        data = handle.read()
+    line = b"Policy version: " + current + b"\n"
+    marker = b"<!-- agentlanes:begin " + current + b" "
+    assert data.count(line) == 1, "the older copy did not find the bridge's version line"
+    assert data.count(marker) == 1, "the older copy did not find the bridge's marker"
+    with open(template, "wb") as handle:
+        handle.write(data.replace(line, b"Policy version: " + older + b"\n")
+                     .replace(marker, b"<!-- agentlanes:begin " + older + b" "))
+    installer = os.path.join(root, "cli", "agentlanes.py")
+    with open(installer, "rb") as handle:
+        source = handle.read()
+    moved = re.sub(rb'(?m)^(PACKAGE_VERSION = ")([^"]+)"',
+                   lambda m: m.group(1) + m.group(2) + b'-older"', source, count=1)
+    assert moved != source, "the older copy did not move PACKAGE_VERSION"
+    with open(installer, "wb") as handle:
+        handle.write(moved)
+    return root
 
 
 def main() -> int:
@@ -865,6 +917,102 @@ def main() -> int:
                "could not be put back" in payload.get("reason", ""),
                payload.get("reason", "")[:90])
 
+        # --- (upgrade) a committed install from an older version, then this one
+        older_init = os.path.join(older_package(workspace), "cli", "agentlanes.py")
+        repo = new_project(workspace, git_exe, own_files=True)
+        older_code, _ = run(older_init, repo, git_exe, "init", "--apply")
+        stage_and_commit(repo, git_exe)
+        code, _ = run(CHECK, repo, git_exe)
+        record("(upgrade) an install from an older policy version checks clean",
+               older_code == 0 and code == 0, (older_code, code))
+        lock_file = os.path.join(repo, ".agents", "agentlanes.lock.json")
+        with open(lock_file, encoding="utf-8") as handle:
+            recorded_before = json.load(handle).get("packageVersion")
+        end = b"<!-- agentlanes:end -->"
+        agents_path = os.path.join(repo, "AGENTS.md")
+        own_section = open(agents_path, "rb").read().partition(end)[2]
+        kept = {rel: open(os.path.join(repo, *rel.split("/")), "rb").read()
+                for rel in (".gitattributes", ".agents/multi-lane-wave-method.lock.json",
+                            "CLAUDE.md")}
+        carriers = sorted(["AGENTS.md", ".agents/agentlanes.lock.json",
+                           ".agents/agentlanes/policy/REPOSITORY_POLICY.md",
+                           ".agents/agentlanes/templates/AGENTS.md"])
+        code, payload = run(INIT, repo, git_exe, "init", "--plan")
+        planned = sorted((c.get("path"), c.get("how")) for c in payload.get("wouldChange", []))
+        record("(upgrade) plan rewrites exactly the four paths that carry the version",
+               code == 0 and planned == [(p, "rewrite") for p in carriers], planned)
+        code, payload = run(INIT, repo, git_exe, "init", "--apply")
+        printed = payload.get("stage", [])
+        record("(upgrade) apply writes exactly those four",
+               code == 0 and sorted(payload.get("wrote", [])) == carriers, payload.get("wrote"))
+        record("(upgrade) the stage list it prints is the one an install prints",
+               sorted(printed) == sorted(STAGE), printed)
+        after = open(agents_path, "rb").read()
+        record("(upgrade) the project's own section of AGENTS.md is unchanged, byte for byte",
+               end in after and after.partition(end)[2] == own_section
+               and OWN_INSTRUCTIONS.strip() in own_section)
+        record("(upgrade) .gitattributes, the method lock and CLAUDE.md keep their bytes",
+               all(open(os.path.join(repo, *rel.split("/")), "rb").read() == data
+                   for rel, data in kept.items()))
+        with open(lock_file, encoding="utf-8") as handle:
+            recorded_after = json.load(handle).get("packageVersion")
+        record("(upgrade) the lock moves from the older version to this one",
+               recorded_before == package_version(older_init) != recorded_after
+               == package_version(INIT), (recorded_before, recorded_after))
+        code, _ = run(CHECK, repo, git_exe)
+        record("(upgrade) check exits 1 between apply and commit", code == 1, code)
+        stage_and_commit(repo, git_exe, printed)
+        code, _ = run(CHECK, repo, git_exe)
+        record("(upgrade) check exits 0 once the printed list is committed", code == 0, code)
+
+        # --- (upgrade) the project's own line below the managed attributes block
+        repo = new_project(workspace, git_exe)
+        older_code, _ = run(older_init, repo, git_exe, "init", "--apply")
+        with open(os.path.join(repo, ".gitattributes"), "ab") as handle:
+            handle.write(b"*.dat binary\n")
+        stage_and_commit(repo, git_exe)
+        code, _ = run(CHECK, repo, git_exe)
+        record("(upgrade) a line below the managed attributes block still checks clean",
+               older_code == 0 and code == 0, (older_code, code))
+        before = snapshot(repo)
+        code, payload = run(INIT, repo, git_exe, "init", "--apply")
+        record("(upgrade) and the upgrade refuses it, with nothing written",
+               code == 2 and "not where this program writes one" in payload.get("refused", "")
+               and snapshot(repo) == before, payload.get("refused", "")[:90])
+
+        # --- (upgrade) a method lock somebody set by hand
+        repo = new_project(workspace, git_exe)
+        older_code, _ = run(older_init, repo, git_exe, "init", "--apply")
+        lock_path = os.path.join(repo, ".agents", "multi-lane-wave-method.lock.json")
+        lock = json.loads(open(lock_path, encoding="utf-8").read())
+        lock["provenanceAuthority"] = "set by hand"
+        with open(lock_path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(lock, handle, indent=2)
+            handle.write("\n")
+        stage_and_commit(repo, git_exe)
+        before = snapshot(repo)
+        code, payload = run(INIT, repo, git_exe, "init", "--apply")
+        record("(upgrade) a method lock somebody edited is refused, with nothing written",
+               older_code == 0 and code == 2
+               and "multi-lane-wave-method.lock.json exists and differs"
+               in payload.get("refused", "") and snapshot(repo) == before,
+               (older_code, payload.get("refused", "")[:90]))
+
+        # --- (upgrade) the default products over an install that chose fewer
+        repo = new_project(workspace, git_exe)
+        older_code, older = run(older_init, repo, git_exe, "init", "--apply", "--agents", "codex")
+        codex_stage = older.get("stage", [])
+        stage_and_commit(repo, git_exe, codex_stage)
+        check_code, _ = run(CHECK, repo, git_exe)
+        record("(upgrade) a codex-only install writes no CLAUDE.md and checks clean once its "
+               "printed list is committed",
+               older_code == 0 and "CLAUDE.md" not in older.get("wrote", ["CLAUDE.md"])
+               and codex_stage and "CLAUDE.md" not in codex_stage and check_code == 0,
+               (older_code, codex_stage, check_code))
+        code, payload = run(INIT, repo, git_exe, "init", "--apply")
+        record("(upgrade) the default --agents over a codex-only install creates CLAUDE.md",
+               code == 0 and "CLAUDE.md" in payload.get("wrote", []), payload.get("wrote"))
+
         # --- refusing is a feature
         repo = new_project(workspace, git_exe)
         code, payload = run(INIT, repo, git_exe, "init", "--plan", "--agents", "some-new-agent")
@@ -875,6 +1023,8 @@ def main() -> int:
         record("a bare git command name is refused",
                code == 2 and "absolute" in payload.get("refused", ""),
                payload.get("refused", "")[:90])
+    except Exception as error:  # noqa: BLE001 - a crash must not take the recorded rows with it
+        record("the run reached its end", False, f"{type(error).__name__}: {error}"[:200])
     finally:
         remove_tree(workspace)
 

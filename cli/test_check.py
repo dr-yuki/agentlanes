@@ -89,10 +89,18 @@ def run_check(repo: str, git_exe: str, extra_env: dict | None = None) -> tuple[i
 
 
 def edit(path: str, transform) -> None:
+    """Change a file, and stop if nothing changed.
+
+    Every case tampers with something. A replace whose text is no longer there changes nothing,
+    and the case then measures an untouched project - the version rows did exactly that the day
+    the version they spelled out stopped being current.
+    """
     with open(path, "rb") as handle:
         data = handle.read()
+    changed = transform(data)
+    assert changed != data, f"the edit did not change {os.path.basename(path)}"
     with open(path, "wb") as handle:
-        handle.write(transform(data))
+        handle.write(changed)
 
 
 def put(repo: str, rel: str, data: bytes) -> None:
@@ -105,6 +113,15 @@ def put(repo: str, rel: str, data: bytes) -> None:
 POLICY = ".agents/agentlanes/policy/REPOSITORY_POLICY.md"
 LOCK = ".agents/agentlanes.lock.json"
 CHECKER = ".agents/agentlanes/cli/check.py"
+# The policy version this package ships, read from the policy rather than spelled out here, and
+# a version that can never be current, to drift to.
+with open(os.path.join(os.path.dirname(HERE), "core", "policy", "REPOSITORY_POLICY.md"),
+          "rb") as _policy:
+    _found = re.match(rb"AGENTLANES-POLICY-BEGIN[ \t]+(\S+)", _policy.read())
+CURRENT = _found.group(1) if _found else b"(missing)"
+DRIFTED = CURRENT + b"-drift"
+TOKEN_LINE = re.compile(rb"(?m)^(AGENTLANES-POLICY-(?:BEGIN|END)[ \t]+)" + re.escape(CURRENT)
+                        + rb"[ \t]*$")
 
 
 def case_missing_generated_source(repo: str) -> None:
@@ -209,10 +226,7 @@ def case_policy_version_drift(repo: str) -> None:
     # Found here, not by the audit: the version the agent echoes and the version the bridge
     # states are two copies, and nothing held them together.
     policy = os.path.join(repo, *POLICY.split("/"))
-    edit(policy, lambda d: d.replace(b"AGENTLANES-POLICY-BEGIN v0.1",
-                                     b"AGENTLANES-POLICY-BEGIN v0.2")
-                            .replace(b"AGENTLANES-POLICY-END v0.1",
-                                     b"AGENTLANES-POLICY-END v0.2"))
+    edit(policy, lambda d: TOKEN_LINE.sub(lambda m: m.group(1) + DRIFTED, d))
     lock_path = os.path.join(repo, *LOCK.split("/"))
     lock = json.loads(open(lock_path, encoding="utf-8").read())
     import hashlib
@@ -1032,7 +1046,7 @@ def case_ambiguous_marker(repo: str) -> None:
 
 def case_end_token_removed(repo: str) -> None:
     edit(os.path.join(repo, *POLICY.split("/")),
-         lambda d: d.replace(b"AGENTLANES-POLICY-END v0.1\n", b""))
+         lambda d: re.sub(rb"(?m)^AGENTLANES-POLICY-END[ \t]+\S+[ \t]*\n", b"", d, count=1))
     restage(repo, *STAGE)
 
 
@@ -1204,7 +1218,7 @@ PINNED = 22          # every path the project pins: locks, bridges, policy, chec
 # rows, the cases, and the two in `extras`. Raise it when you add one - that is the point. Its
 # twin in test_init.py went in because two platforms recorded different numbers of rows in
 # silence, each reporting all of its own as green.
-ROWS = 116
+ROWS = 127
 CASES = [
     ("a freshly installed project", case_clean, 0, ()),
     ("a rule inside the generated region was edited", case_block_edited, 1,
@@ -1430,7 +1444,8 @@ CASES = [
     ("ident on a pinned path", case_ident_attribute, 1,
      (("ident is set", 2),)),
     ("the policy version and the bridge disagree", case_policy_version_drift, 1,
-     ("AGENTS.md says policy version v0.1 while the policy carries v0.2",)),
+     (f"AGENTS.md says policy version {CURRENT.decode()} while the policy carries "
+      f"{DRIFTED.decode()}",)),
     ("the project lock is missing", case_lock_missing, 2,
      ("no project lock at .agents/agentlanes.lock.json",)),
     ("the project lock is truncated", case_lock_malformed, 2,
@@ -1601,6 +1616,92 @@ def record(results: list[dict], name: str, expected_code: int, code: int,
     return passed
 
 
+def version_copies(package: str) -> dict[str, str]:
+    """Every copy of the version in the package, read from the files that carry it."""
+    def read(*parts: str) -> bytes:
+        with open(os.path.join(package, *parts), "rb") as handle:
+            return handle.read()
+
+    policy = read("core", "policy", "REPOSITORY_POLICY.md").strip().split(b"\n")
+    template = read("templates", "AGENTS.md")
+    installer = read("cli", "agentlanes.py")
+    readme = read("README.md")
+
+    def first(pattern: bytes, data: bytes) -> str:
+        found = re.search(pattern, data, re.MULTILINE)
+        return found.group(1).decode() if found else "(missing)"
+
+    return {
+        "policy begin": first(rb"^AGENTLANES-POLICY-BEGIN[ \t]+(\S+)", policy[0]),
+        "policy end": first(rb"^AGENTLANES-POLICY-END[ \t]+(\S+)", policy[-1]),
+        "bridge line": first(rb"^Policy version:[ \t]*(\S+)", template),
+        "bridge marker": first(rb"^<!--\s*agentlanes:begin[ \t]+(\S+)", template),
+        "package": first(rb'^PACKAGE_VERSION = "([^"]+)"', installer),
+        "readme status": first(rb"^> \*\*Status: (v[0-9][^*\s]*?)\.\*\*", readme),
+        "readme clone": first(rb"git clone --branch (v\S+) ", readme),
+    }
+
+
+POLICY_COPIES = ("policy begin", "policy end", "bridge line", "bridge marker")
+
+
+def versions_agree(copies: dict[str, str]) -> bool:
+    """The four policy copies are one value, the package version starts with it, and README
+    names the package version in both places a reader copies it from.
+
+    A release that changes the policy moves its major.minor with it; one that does not keeps the
+    policy's. So `v0.2` goes with `0.2.0` or `0.2.1`, never with `0.1.0`.
+    """
+    policy = {copies[k] for k in POLICY_COPIES}
+    if len(policy) != 1:
+        return False
+    version = policy.pop()
+    package = copies["package"]
+    return (version.startswith("v") and package.startswith(version[1:] + ".")
+            and copies["readme status"] == copies["readme clone"] == "v" + package)
+
+
+def version_rows(results: list[dict]) -> int:
+    """The version is written in seven places and a release moves them by hand.
+
+    The policy's two tokens, the bridge's line and marker, PACKAGE_VERSION, and README's status
+    line and clone command. A half-moved set installs a project whose own check goes red, or
+    sends a reader to the previous release, and nothing named the cause: the row that measures
+    version drift expects that very finding, so it passed. These rows ask the package itself,
+    and ask the comparison for a no on every copy and every decision it makes.
+    """
+    copies = version_copies(os.path.dirname(HERE))
+    minor = copies["policy begin"][1:]
+
+    def release(package: str) -> dict[str, str]:
+        return dict(copies, package=package,
+                    **{"readme status": "v" + package, "readme clone": "v" + package})
+
+    rows = [("the package's copies of its version agree", True, copies)]
+    rows += [(f"versions_agree says no when the {key} did not move", False,
+              dict(copies, **{key: copies[key] + "-stale"}))
+             for key in POLICY_COPIES + ("readme status", "readme clone")]
+    rows += [
+        ("versions_agree says no to a policy version without its v", False,
+         dict(copies, **{key: "w" + minor for key in POLICY_COPIES})),
+        ("versions_agree says no to a package version sharing only leading digits", False,
+         release(minor + "0.0")),
+        ("versions_agree says no to a package version that only ends in the policy's", False,
+         release("1" + minor + ".0")),
+        ("versions_agree says yes to a patch release of the same policy", True,
+         release(minor + ".9")),
+    ]
+    failures = 0
+    for name, want, given in rows:
+        said = versions_agree(given)
+        passed = said is want
+        results.append({"case": name, "expected": ["yes" if want else "no"],
+                        "findings": [str(said)] + [f"{k}: {v}" for k, v in given.items()],
+                        "pass": passed})
+        failures += 0 if passed else 1
+    return failures
+
+
 def record_rows(results: list[dict]) -> int:
     """Rows for `record` itself - the wiring, not the two functions it wires together.
 
@@ -1730,7 +1831,8 @@ def main() -> int:
 
     results: list[dict] = []
     # First, so what decides every case is itself asked for a no before it decides one.
-    failures = matcher_rows(results) + shape_rows(results) + record_rows(results)
+    failures = (matcher_rows(results) + shape_rows(results) + record_rows(results)
+                + version_rows(results))
     # Resolved, not just created: check.py resolves --repo with realpath, so an unresolved
     # workspace makes the case compare a path against a different spelling of itself. On macOS
     # the temporary directory is reached through a symlink and the guard refuses to traverse
@@ -1739,8 +1841,20 @@ def main() -> int:
     workspace = os.path.realpath(tempfile.mkdtemp(prefix="agentlanes-check-"))
     try:
         for index, (name, mutate, expected_code, expected) in enumerate(CASES):
-            repo = build_project(workspace, args.git_executable, index)
-            extra_env = mutate(repo) or None
+            repo = None
+            try:
+                repo = build_project(workspace, args.git_executable, index)
+                extra_env = mutate(repo) or None
+            except Exception as error:  # noqa: BLE001 - recorded as a red row below
+                # A case whose tampering changed nothing, or whose project could not be built,
+                # used to end the run with a traceback and take every recorded row with it.
+                results.append({"case": name, "expectedExit": expected_code, "exit": None,
+                                "findings": [f"not built: {type(error).__name__}: {error}"[:200]],
+                                "pass": False})
+                failures += 1
+                if repo is not None:
+                    remove_tree(repo)
+                continue
             code, payload = run_check(repo, args.git_executable, extra_env)
             # For an unmeasurable run the reason IS the answer, so it is matched like a
             # finding. Four rows used to expect exit 2 and nothing else, which made them

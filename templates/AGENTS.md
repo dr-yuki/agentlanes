@@ -1,4 +1,4 @@
-<!-- agentlanes:begin v0.1 - generated block, do not edit by hand; `check` verifies it byte for byte -->
+<!-- agentlanes:begin v0.2 - generated block, do not edit by hand; `check` verifies it byte for byte -->
 # Agent instructions
 
 Before you write anything in this repository, open
@@ -13,7 +13,8 @@ or if either line is missing, say so and stay read-only until a human resolves i
 These six rules are repeated here because a reader who got only this far must still not break
 them. They do not replace the policy file.
 
-1. One writer per working directory. Never write in a checkout another agent is using.
+1. One writer per working directory. Never write in a checkout another agent is using,
+   unless that agent spawned you to write there in its turn.
 2. No push, pull request, merge, release, deploy, install, or repository-setting change
    unless the user asks for that exact action in the current conversation.
 3. Stage exact paths. Never `git add .` and never `git add -A`. Never discard, reset,
@@ -24,7 +25,7 @@ them. They do not replace the policy file.
 6. If a rule and a measurement disagree, or you need a permission you were not given, stop
    and report it. Stopping with a finding is a successful outcome.
 
-Policy version: v0.1
+Policy version: v0.2
 <!-- agentlanes:end -->
 
 <!-- Everything below this line belongs to this project. It is never regenerated and its

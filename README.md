@@ -15,10 +15,10 @@ and ships a checker that verifies the bytes a clone receives, not the bytes on y
 It also vendors a method for running several agents in parallel without their work colliding
 (see [Parallel work](#parallel-work-the-vendored-method)).
 
-> **Status: v0.1.0, the first release.** Measured on Windows, Linux and macOS (GitHub-hosted
-> runners). The handshake below has been measured with two agent products, both in their desktop
-> form. Read [What a green does not mean](#what-a-green-does-not-mean) before you rely on it, and
-> [tell us](#feedback) where it did not fit.
+> **Status: v0.2.0.** Measured on Windows, Linux and macOS (GitHub-hosted runners). To move a
+> project from 0.1.0, see [Upgrading](#upgrading). Read
+> [What a green does not mean](#what-a-green-does-not-mean) before you rely on it - it also says
+> how far the handshake has been measured - and [tell us](#feedback) where it did not fit.
 
 ---
 
@@ -40,7 +40,7 @@ vendored into the project so the project can answer questions about itself.
 ## Get it
 
 ```
-git clone https://github.com/dr-yuki/agentlanes
+git clone --branch v0.2.0 https://github.com/dr-yuki/agentlanes
 ```
 
 Clone it **outside** the project you will install it into - a sibling folder is fine. A copy
@@ -127,6 +127,8 @@ your project uses, and staging it wholesale commits their files into this change
 <python> -I -B .agents/agentlanes/cli/check.py --repo <project> --git-executable <git>
 ```
 
+Run it from inside the project; the script path is relative to it.
+
 A fresh install that has been committed exits `0`. **Before you commit, it exits `1`, and that
 is correct**: what somebody who clones your repository receives is the committed tree, not your
 working tree and not the index. Pins in a file git is not tracking protect nobody who clones.
@@ -156,7 +158,8 @@ is intended.
 - An existing `AGENTS.md` keeps everything outside the generated region, byte for byte. The
   region goes **first**, because several products cap how much instruction text they read.
 - An existing `.gitattributes` keeps its own lines; the managed block goes **last**, because the
-  last matching line is the one in effect.
+  last matching line is the one in effect. A managed block with lines of the project's own below
+  it is refused, not moved.
 - A file whose name differs only in case from one this would write (`agents.md` beside
   `AGENTS.md`) is refused rather than renamed. Those are one file on Windows and macOS.
 - An existing whole-file bridge (`CLAUDE.md`) or method lock
@@ -164,6 +167,44 @@ is intended.
   refused, not overwritten, unless you pass `--replace-bridges` - for `CLAUDE.md`, only while
   `claude-code` is one of the `--agents`, as step 1 above describes. The project lock
   (`.agents/agentlanes.lock.json`) is always written afresh: nothing in it is yours.
+
+## Upgrading
+
+A project on an older version keeps checking against the files it vendored, and nothing changes
+for it until somebody re-runs the installer. The project lock records the installed version as
+`packageVersion`. To move to a newer one, get the newer package outside the project as before,
+and run `init --plan` and then `init --apply` over the install, with `--agents` as it was
+installed: the lock's `generated` list names `CLAUDE.md` only if `claude-code` was one of them.
+The default adds a `CLAUDE.md` the project did not have, and leaving out a product whose bridge
+file is present is refused.
+
+Everything [Existing projects](#existing-projects) says holds for an upgrade. In practice:
+
+- **Rewritten**, wherever the new bytes differ: everything under `.agents/agentlanes/`, the
+  generated region of `AGENTS.md`, the managed block in `.gitattributes`, and the project lock.
+  From 0.1.0 to 0.2.0 that is four paths: the policy, the vendored `AGENTS.md` template, the
+  region, and the lock.
+- **Left byte for byte**: the project section of `AGENTS.md`, the project's own
+  `.gitattributes` lines above the managed block, and the method lock while the method has not
+  changed. Nothing is deleted: a file an older version vendored and this one does not ship stays
+  until you remove it, and `check` reports it until then.
+- **Refused, with nothing written**: a `.gitattributes` with lines of its own below the managed
+  block - move them above it; a green check does not rule this out. And a `CLAUDE.md` or method
+  lock that differs from what this version would write: on an upgrade that also happens when the
+  release changed that template or the method, not only when somebody edited the file, and
+  `--replace-bridges` discards what was there.
+
+Read the policy's diff before anyone commits it:
+`git -C <project> diff HEAD -- .agents/agentlanes/policy/REPOSITORY_POLICY.md`. Then stage exactly
+the printed list, commit - an agent only if the project section allows it - and check, as for an
+install; `check` exits `1` until the commit. Repeat [the handshake](#the-handshake) in a fresh
+session: both tokens should carry the policy version `AGENTS.md` now states.
+
+The docs are not installed. A block your project copied from them stays as it was; compare it with
+the new page and copy what you want by hand. From 0.1.0 the Lanes block changed most: it had every
+lane edit its own row of one shared file, and 0.2.0 gives the table to whoever integrates and each
+lane an ignored `.lane-state`. If you take the new block, add `/.lane-state` to `.gitignore` in the
+same commit.
 
 ## Exit codes
 
@@ -213,9 +254,21 @@ A correct, clean install then reports
 and exits 1. **That is question 5 working, not a defect:** the premise here is that there is one
 policy, so a second place that tells an agent what to do is exactly what it looks for. But it is
 the first thing you will see, and **there is no flag that declares those files known.** Your
-options are to fold their content into the project section of `AGENTS.md`, to delete them, or to
-decide this is not for you yet. `init --plan` asks you about this before writing anything - it
-is the fifth of the questions it prints.
+options are to keep them and live with that `1`, to fold their content into the project section
+of `AGENTS.md`, to delete them, or to decide this is not for you yet. `init --plan` asks you about
+this before writing anything - it is the fifth of the questions it prints. Deleting the project's
+files does not reach a collaborator's home directory: instructions and skills kept there can still
+load, and [a green cannot see them](#what-a-green-does-not-mean).
+
+If a product needs a directory of its own and you keep it, the policy's rule for an unavoidable
+second copy applies: generate the product's files from one source, and check them byte for byte
+against a fresh regeneration - in the committed tree, which a clone receives, and in a fresh
+checkout on each platform you use, which is what an agent there opens. That stops them drifting;
+it does not make them known. The checker still reports every file there, and the source too if it
+sits in a swept directory such as `.agents/skills/`, so its exit code stops being a gate. This is a
+shape your project builds and owns; this package does not recognise it. Write the choice and the
+files it covers into the project section, so a later session reads a `1` that names only those
+files as the cost it is, not as something new.
 
 Two cases where the same message is not about your project and there is nothing to fix: a **git
 submodule** carries instruction files the superproject cannot change, and so does a vendored
@@ -243,6 +296,11 @@ scope invites somebody to lean on it for something it never covered.
 - **It sweeps files that tell an agent what to do, not files that grant it permission.**
   `.claude/settings.json` and `.mcp.json` are not on the list, and they are the ones that
   pre-approve tools or attach hooks. A pull request that adds one passes.
+- **It looks only inside the project.** Instructions, skills and memory in a collaborator's home
+  directory are invisible to it, and an agent can be following them: in Claude Code a personal
+  skill runs instead of a project skill of the same name (its
+  [skills documentation](https://code.claude.com/docs/en/skills), read 2026-09-24). A green never
+  states which instruction source actually ran.
 - **Only the generated region of `AGENTS.md` is checked.** Everything below it is your project's
   own text, kept byte for byte - which also means a line appended there is never compared with
   anything. The policy ranks that text as authority, so read changes to it as you would read
@@ -252,7 +310,8 @@ scope invites somebody to lean on it for something it never covered.
 - **Files your project ignores** are left out of the working-tree half of that sweep.
 - **A lock and the files it pins, changed together, still agree with each other.** The one
   exception is the method bundle, whose digest is a constant inside the checker.
-- **The handshake has been measured with two agent products**, both in their desktop form.
+- **The handshake has been measured with two agent products**, both in their desktop form, on
+  this policy ([the record](examples/handshake-2026-09-25.md)).
 
 ## Agent products
 
@@ -302,8 +361,9 @@ It is for **several writers in isolated worktrees aiming at one integration**. I
 agent working alone, for read-only research in parallel, or for two writers sharing one directory.
 Its own `SKILL.md` says when to use it and when not to.
 
-To set up the folders themselves - where they go, what a new one does not contain, what they
-all share, how to check them, and how to keep each lane working with a goal - see
+To set up the folders themselves - where they go, how to write the lanes down and hand a finding
+from one to another, what a new one does not contain, what they all share, how to check them, how
+to keep each lane working with a goal, and what removing one deletes - see
 [docs/worktrees.md](docs/worktrees.md). Whether to work in parallel at all is the user's
 decision; most projects never need it.
 
@@ -338,6 +398,10 @@ CI runs all four on Linux, macOS and Windows with Python 3.10 and 3.12, on every
 request and once a week. It also installs into a fresh project and checks it, and checks an
 adopted project through `actions/checkout` at the default depth and with full history.
 
+**The policy version is the package's major.minor.** A release that changes the policy moves both.
+The version tokens, the bridge's `Policy version:` line and marker, `PACKAGE_VERSION`, and this
+page's status line and clone command move together; suite rows check that they agree.
+
 **The method bundle is byte-pinned.** Its digest is a constant in `cli/check.py`, so changing the
 bundle means changing the checker too. That is deliberate: a bundle that could be re-sealed by
 editing a lock inside the project would agree with itself.
@@ -350,7 +414,7 @@ editing a lock inside the project would agree with itself.
 | `core/policy/REPOSITORY_POLICY.md` | The shared policy |
 | `core/method/` | The vendored multi-agent method, byte-pinned |
 | `templates/` | `AGENTS.md`, `CLAUDE.md` and the `.gitattributes` pins |
-| `examples/` | An acceptance scenario and the handshake record, with their measurements |
+| `examples/` | An acceptance scenario and the handshake records, with their measurements |
 | `docs/` | Instructions for the agent doing an install, and for setting up parallel lanes |
 | `LICENSE` | MIT. The installer copies it into each project beside the vendored files |
 

@@ -10,7 +10,7 @@ this repository depends on your having them.
     <python> -I -B cli/agentlanes.py init --apply --repo ../agentlanes-fixture --git-executable <git>
     git -C ../agentlanes-fixture add -- <the paths init printed under "stage">
     git -C ../agentlanes-fixture -c user.name=you -c user.email=you@example.invalid \
-        commit -m "chore: adopt agentlanes 0.1.0"
+        commit -m "chore: adopt agentlanes"
     <python> -I -B cli/check.py --repo ../agentlanes-fixture --git-executable <git>
 
 `init` prints the exact list to stage, so it is never guessed:
@@ -32,9 +32,9 @@ forbids `git add -A` by name, and `.agents` is a directory the project shares wi
 it uses — staging it wholesale commits another tool's files into the commit that adopts this
 package. Both mistakes were in this page and in the package's own test suite: an install
 procedure contradicting the policy it installs. That is the same defect family as shipping this
-package's own directory names inside a file meant for other people's repositories, and four
-instances of it are now recorded — the line-ending pins, the `core/method/` path in the policy,
-`git add -A`, and `.agents`.
+package's own directory names inside a file meant for other people's repositories. The
+line-ending pins, the `core/method/` path in the policy, `git add -A` and `.agents` all belong to
+it.
 
 ## The vendored bundle needs no installation
 
@@ -68,3 +68,12 @@ in this package's own fixture, before the pins were added: `SKILL.md` came out 1
 That measurement is recorded here rather than in the file itself. The pins ship into every
 adopting project, and a comment describing something measured here would have read, in someone
 else's repository, as a description of their history.
+
+## The dated records
+
+[acceptance-2026-09-05.md](acceptance-2026-09-05.md) and
+[handshake-2026-09-05.md](handshake-2026-09-05.md) measured the v0.1 policy; "today" in them
+means that date. [handshake-2026-09-25.md](handshake-2026-09-25.md) measures the v0.2 policy and
+supersedes the earlier handshake record for current bytes. The acceptance record was amended in
+place before the policy made superseding the rule, and its CI table predates the change its own
+paragraph above the table describes: `.github/workflows/suites.yml` is current.

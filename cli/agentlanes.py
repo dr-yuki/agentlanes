@@ -20,8 +20,8 @@ write lands wherever that link points.
 Nothing here destroys project content. An existing AGENTS.md keeps everything outside the
 generated region, byte for byte and blank lines included, and the region is placed first
 because several products cap the instruction text they read and drop what is past the cap. An
-existing .gitattributes keeps its own lines the same way, and the managed block is moved to the
-end, because the last matching line is the one in effect.
+existing .gitattributes keeps its own lines the same way, and the managed block is written last,
+because the last matching line is the one in effect; one with project lines below it is refused.
 
 `--plan` writes nothing anywhere: not in the project, and not in a temporary directory either.
 Measuring the method bundle's digest reads the package's own copy rather than materialising
@@ -49,7 +49,7 @@ import subprocess
 import tempfile
 
 PACKAGE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PACKAGE_VERSION = "0.1.0"
+PACKAGE_VERSION = "0.2.0"
 
 VENDORED = ".agents/agentlanes"
 PROJECT_LOCK = ".agents/agentlanes.lock.json"
@@ -396,7 +396,7 @@ def compose_agents_md(existing: bytes | None) -> bytes:
 
 
 def compose_gitattributes(existing: bytes | None) -> bytes:
-    """Move the managed block to the end and leave every other line exactly as it was.
+    """Write the managed block last and leave every other line exactly as it was.
 
     The block is found by its own marker lines rather than by matching its content, so a copy
     written with different line endings is recognised and replaced instead of being appended a

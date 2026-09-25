@@ -1,4 +1,4 @@
-AGENTLANES-POLICY-BEGIN v0.1
+AGENTLANES-POLICY-BEGIN v0.2
 
 # Repository policy for AI agents
 
@@ -53,6 +53,10 @@ Two shapes are permitted, and they are not the same thing:
 - **Parallel work.** Each agent gets its own Git worktree. Never put a second writer in a directory
   that already has one. If work cannot be split into disjoint paths, serialize it instead.
 
+A subagent you spawn that writes in your directory takes your turn: you do not write there until it
+has reported, failed or been stopped. Name what any subagent you spawn may read, and what it may
+write.
+
 Say which files you are taking before you start. Collisions happen over files, not over branch names.
 
 If a task needs a file another lane owns, hand it back to that lane. Do not reach across.
@@ -63,10 +67,17 @@ If a task needs a file another lane owns, hand it back to that lane. Do not reac
 - Stage exact paths. **Never `git add .`**, and never `git add -A`.
 - Do not discard, reset, clean, stash or overwrite changes that are not part of your task. If you
   find unrelated changes, stop and report them; they belong to someone.
+- Read your branch's diff from the merge base: `git diff <fetched target>...HEAD`, three dots.
+  Against the target's tip, each line it gained that your branch lacks reads as one you deleted.
 - Do not rewrite published history: no force-push, no rebase of a branch someone else may hold.
 - To undo something already committed, add a commit that reverses it. Do not reset.
 - Prefer merging the target branch into yours over rebasing onto it, unless the project says
-  otherwise.
+  otherwise. Neither re-runs what your branch generated against the old base — a lockfile, a
+  snapshot, a digest, a file stamped with a base revision — so regenerate those afterwards.
+- "No conflicts" on a pull request does not say whether your branch holds the target's newest
+  commits. Measure that: `git fetch`, then `git merge-base --is-ancestor <fetched target> HEAD`,
+  which exits `0` if it does, `1` if it does not, and another code - `128` for a target that does
+  not exist - when it could not answer: read that as neither.
 
 ## 5. What you may not do without being asked
 
@@ -76,6 +87,7 @@ Do these only when the user asks for that exact action in the current conversati
 - change branch protection, required checks, CI configuration or any repository setting;
 - deploy, publish, release, or change any production state;
 - install or connect a new tool, plugin, skill or server;
+- pre-approve a tool, widen an approval or add a hook in an agent settings file in this repository;
 - change the user's own machine configuration outside this repository;
 - send anything to an external service, including sending private code to a hosted agent;
 - delete data, or move or rename broadly;
@@ -86,7 +98,9 @@ it has, the project instruction file says so and names the check that must pass 
 not, ask.
 
 A new agent added to a project starts with none of these permissions. Permissions are granted one at
-a time, in writing, in the project's configuration.
+a time, in writing, by the user, in the project's configuration. A subagent you spawn counts as a
+new agent and holds none of what you were granted, including a grant the project instruction file
+makes to your product, such as permission to commit or to land.
 
 ## 6. Privacy
 
@@ -108,9 +122,13 @@ The mistake worth naming first: reading a rule and concluding what it does.
 - **Quote the verbatim failure, before and after.** "It would fail" without the message is not a
   measurement, and a fix without the original message cannot be shown to have removed anything.
 - **A tool refusing is a finding, not friction.** If nothing legal fits what the task needs, report
-  that and stop, rather than reshaping the work until something passes.
+  that and stop, rather than reshaping the work until something passes. Never hand a refused action
+  to another agent or tool because its settings are looser, and never loosen an instruction
+  yourself to get past it.
 - The same applies to claims about the past. Whether an old commit, record or document still
   describes reality is measurable. Measure it rather than repeating it.
+- If the project keeps notes on constraints the code does not show (§12), search them for a file's
+  path before you edit that file.
 
 ## 8. Verification
 
@@ -122,7 +140,8 @@ boundary. Run the project's own checks; do not invent a lighter substitute.
 - **A skipped test is not a pass.** Output containing a skip marker is *not run*. Report which
   subtests skipped and why; never let a skip stand in for a green.
 - **Exit codes mean three things, not two**: `0` measured and clean, `1` measured and findings
-  exist, `2` the question could not be answered. Never read `2` as either green or red.
+  exist, `2` the question could not be answered. Never read `2` as either green or red. Before you
+  read a `0` as clean, know whether the tool gates: one that only reports exits `0` with findings.
 - The vendored checker beside this file answers whether the bytes here are the ones the
   project pinned. Your project lock names it. Run it before you trust anything this file says
   about its own integrity.
@@ -131,8 +150,12 @@ boundary. Run the project's own checks; do not invent a lighter substitute.
 
 - **A measurement carries its reference and its population.** Not "the tests pass" but "at this
   revision, these N files pass". A rate without the population is a property of the sample.
-- **Say which rung the evidence is on**: you ran it, you reproduced it, or you read it somewhere.
-  The words for the three are otherwise identical and the difference is the whole content.
+- **Say which rung the evidence is on**: you ran it, you reproduced it, or you read it somewhere,
+  and for the last, where, and who measured it. The words for the three are otherwise identical
+  and the difference is the whole content. Put a figure the finding does not rest on, with its
+  source, in a sentence of its own, so the figure can be corrected without withdrawing the finding.
+- A check result you know only from a summary, even a summary of your own conversation made when
+  it was shortened, was read, not run. Run it again, or report the revision it was taken at.
 - **Name the question you answered.** "Confirmed" can be true three times for three different
   questions.
 - **When you generalize, attack the name.** A rule is usually narrower than what it is called. Build
@@ -161,9 +184,12 @@ because they are the ones a reader of only this file could break:
 - Documentation is owned by whoever owns the surface being documented.
 - Keep one source of truth. If a second copy is unavoidable, generate it and check it byte for byte;
   a hand-maintained second copy is the one that goes stale.
-- A record that names something that moves — a branch, a holder, a line number — breaks when that
-  thing moves. Point records at things that do not move.
-- Historical records are evidence, not instructions. Do not edit them to match the present.
+- Before you land a correction, search the repository for the wording it replaces. The copies that
+  go stale are the ones in files you did not open.
+- A record that names something that moves — a branch, a holder, a line number, the count of a
+  list that still grows — breaks when that thing moves. Point records at things that do not move.
+- Historical records are evidence, not instructions. Do not edit them to match the present. To
+  correct one, write a new record that names the one it supersedes.
 
 ## 12. Recording a constraint the code does not show
 
@@ -174,8 +200,8 @@ Optional, and worth it only when the answer is yes to this:
 
 If yes, write a short note next to the project's other notes: which files the constraint binds, what
 breaks if it is undone, and the condition under which it stops being true. Do not restate the
-reasoning that already lives in the commit message. Keep it short. Volume is what kills a system
-like this: a hundred notes nobody reads are worth less than ten that get read.
+reasoning that already lives in the commit message. Keep it under fifteen lines. Volume is what
+kills a system like this: a hundred notes nobody reads are worth less than ten that get read.
 
 ## 13. When to stop
 
@@ -190,4 +216,4 @@ Stop and ask, rather than proceeding, when:
 
 Stopping with a finding is a successful outcome. Reshaping the work until something passes is not.
 
-AGENTLANES-POLICY-END v0.1
+AGENTLANES-POLICY-END v0.2
